@@ -1,12 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.src.*;
 
 import java.util.List;
 
 import static net.dravigen.creative_tools.api.ToolHelper.*;
-import static net.dravigen.creative_tools.api.HelperCommand.*;
 
 public class Copy extends CommandBase {
 	
@@ -34,7 +32,7 @@ public class Copy extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		if (strings.length == 0 && (pos1 == null || pos2 == null)) {
-			HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
 			
 			return;
 		}
@@ -62,22 +60,27 @@ public class Copy extends CommandBase {
 		int blockNum = 0;
 		int entityNum = 0;
 		
-		List<Entity> entitiesInSelection = world.getEntitiesWithinAABBExcludingEntity(player, new AxisAlignedBB(minX, minY, minZ, maxX + 1, maxY + 1, maxZ + 1));
+		List<Entity> entitiesInSelection = world.getEntitiesWithinAABBExcludingEntity(player,
+																					  new AxisAlignedBB(minX,
+																										minY,
+																										minZ,
+																										maxX + 1,
+																										maxY + 1,
+																										maxZ + 1));
 		
-		if (!entitiesInSelection.isEmpty()) {
-			for (Entity entity : entitiesInSelection) {
-				if (entity instanceof EntityPlayer) continue;
-				NBTTagCompound nbt = new NBTTagCompound();
-				entity.writeToNBT(nbt);
-				copyEntityList.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
-															entity.posY - minY,
-															entity.posZ - minZ,
-															entity.rotationYaw,
-															entity.rotationPitch), entity.getClass(), nbt));
-				entityNum++;
-			}
+		for (Entity entity : entitiesInSelection) {
+			if (entity instanceof EntityPlayer) continue;
+			NBTTagCompound nbt = new NBTTagCompound();
+			entity.writeToNBT(nbt);
+			copyEntityList.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
+															  entity.posY - minY,
+															  entity.posZ - minZ,
+															  entity.rotationYaw,
+															  entity.rotationPitch), entity.getClass(), nbt));
+			entityNum++;
 		}
 		
+	
 		for (int y = minY; y <= maxY; y++) {
 			for (int x = minX; x <= maxX; x++) {
 				for (int z = minZ; z <= maxZ; z++) {

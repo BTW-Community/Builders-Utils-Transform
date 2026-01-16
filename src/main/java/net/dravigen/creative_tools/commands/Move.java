@@ -1,12 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
 import api.world.BlockPos;
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.src.*;
 
 import java.util.*;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 
 public class Move extends CommandBase {
@@ -17,14 +15,16 @@ public class Move extends CommandBase {
 	
 	@Override
 	public String getCommandUsage(ICommandSender iCommandSender) {
-		return "/move [x1/y1/z1] [x2/y2/z2] [x3/y3/z3]";
+		return "/move <add|to> [x/y/z]";
 	}
 	
 	@Override
 	public List addTabCompletionOptions(ICommandSender sender, String[] strings) {
 		MovingObjectPosition block = getBlockPlayerIsLooking(sender);
-		
-		if (block != null && strings.length < 4) {
+		if (strings.length == 1) {
+			return getListOfStringsMatchingLastWord(strings, "to", "add");
+		}
+		if (block != null && strings.length == 2 && strings[0].equalsIgnoreCase("to")) {
 			return getListOfStringsMatchingLastWord(strings, block.blockX + "/" + block.blockY + "/" + block.blockZ);
 		}
 		
@@ -35,8 +35,8 @@ public class Move extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		try {
-			if (strings.length != 3 && (pos1 == null || pos2 == null)) {
-				HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection3"));
+			if (pos1 == null || pos2 == null) {
+				sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
 				
 				return;
 			}
@@ -45,27 +45,12 @@ public class Move extends CommandBase {
 			World world = sender.getEntityWorld();
 			EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
 			
-			int x1 = strings.length == 3 ? Integer.parseInt(strings[0].split("/")[0]) : pos1.x;
-			int y1 = strings.length == 3 ? Integer.parseInt(strings[0].split("/")[1]) : pos1.y;
-			int z1 = strings.length == 3 ? Integer.parseInt(strings[0].split("/")[2]) : pos1.z;
-			int x2 = strings.length == 3 ? Integer.parseInt(strings[1].split("/")[0]) : pos2.x;
-			int y2 = strings.length == 3 ? Integer.parseInt(strings[1].split("/")[1]) : pos2.y;
-			int z2 = strings.length == 3 ? Integer.parseInt(strings[1].split("/")[2]) : pos2.z;
-			int x3 = strings.length == 3
-					 ? Integer.parseInt(strings[2].split("/")[0])
-					 : strings.length == 1
-					   ? Integer.parseInt(strings[0].split("/")[0])
-					   : MathHelper.floor_double(player.posX);
-			int y3 = strings.length == 3
-					 ? Integer.parseInt(strings[2].split("/")[1])
-					 : strings.length == 1
-					   ? Integer.parseInt(strings[0].split("/")[1])
-					   : MathHelper.floor_double(player.posY);
-			int z3 = strings.length == 3
-					 ? Integer.parseInt(strings[2].split("/")[2])
-					 : strings.length == 1
-					   ? Integer.parseInt(strings[0].split("/")[2])
-					   : MathHelper.floor_double(player.posZ);
+			int x1 = pos1.x;
+			int y1 = pos1.y;
+			int z1 = pos1.z;
+			int x2 = pos2.x;
+			int y2 = pos2.y;
+			int z2 = pos2.z;
 			
 			int minX = Math.min(x1, x2);
 			int minY = Math.min(y1, y2);
@@ -74,87 +59,73 @@ public class Move extends CommandBase {
 			int maxY = Math.max(y1, y2);
 			int maxZ = Math.max(z1, z2);
 			
-			List<EntityInfo> entities = new ArrayList<>();
+			int x3 = Integer.parseInt(strings[1].split("/")[0]) + (strings[0].equalsIgnoreCase("add") ? minX : 0);
+			int y3 = Integer.parseInt(strings[1].split("/")[1]) + (strings[0].equalsIgnoreCase("add") ? minY : 0);
+			int z3 = Integer.parseInt(strings[1].split("/")[2]) + (strings[0].equalsIgnoreCase("add") ? minZ : 0);
 			
+			Selection selection1 = new Selection(new BlockPos(minX, minY, minZ),
+												new BlockPos(maxX, maxY, maxZ));
+			
+			
+			List<EntityInfo> entities = new ArrayList<>();
 			List<Entity> entitiesInSelection = world.getEntitiesWithinAABBExcludingEntity(player,
 																						  new AxisAlignedBB(minX,
 																											minY,
 																											minZ,
-																											maxX,
-																											maxY,
-																											maxZ));
+																											maxX + 1,
+																											maxY + 1,
+																											maxZ + 1));
 			Queue<BlockToRemoveInfo> blocksToRemove = new LinkedList<>();
 			Queue<BlockInfo> moveBlockList = new LinkedList<>();
 			
+			List<BlockInfo> undoNonBlock1 = new ArrayList<>();
+			Queue<BlockInfo> undoBlock1 = new LinkedList<>();
+			List<EntityInfo> undoEntity1 = new ArrayList<>();
 			List<BlockInfo> undoNonBlock = new ArrayList<>();
 			Queue<BlockInfo> undoBlock = new LinkedList<>();
 			List<EntityInfo> undoEntity = new ArrayList<>();
 			
-			if (!entitiesInSelection.isEmpty()) {
-				for (Entity entity : entitiesInSelection) {
-					if (entity instanceof EntityPlayer) continue;
-					
-					NBTTagCompound nbt = new NBTTagCompound();
-					entity.writeToNBT(nbt);
-					entities.add(new EntityInfo(new LocAndAngle(entity.posX - minX + x3,
-																entity.posY - minY + y3,
-																entity.posZ - minZ + z3,
-																entity.rotationYaw,
-																entity.rotationPitch), entity.getClass(), nbt));
-					
-					undoEntity.add(new EntityInfo(new LocAndAngle(entity.posX,
-																  entity.posY,
-																  entity.posZ,
-																  entity.rotationYaw,
-																  entity.rotationPitch), entity.getClass(), nbt));
-				}
-			}
 			
-			for (int y = minY; y <= maxY; y++) {
-				for (int x = minX; x <= maxX; x++) {
-					for (int z = minZ; z <= maxZ; z++) {
-						int id = world.getBlockId(x, y, z);
-						int meta = world.getBlockMetadata(x, y, z);
-						TileEntity tile = world.getBlockTileEntity(x, y, z);
-						
-						NBTTagCompound nbt = null;
-						
-						if (tile != null) {
-							nbt = new NBTTagCompound();
-							tile.writeToNBT(nbt);
-							nbt.removeTag("x");
-							nbt.removeTag("y");
-							nbt.removeTag("z");
-						}
-						
-						BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, nbt);
-						
-						Block block = Block.blocksList[id];
-						
-						if (block != null) {
-							if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-									block instanceof BlockFluid ||
-									block.isFallingBlock() ||
-									!block.canPlaceBlockAt(world, 0, 254, 0))) {
-								undoNonBlock.add(pasteInfo);
-							}
-							else {
-								undoBlock.add(pasteInfo);
-							}
-						}
-						else {
-							undoBlock.add(pasteInfo);
-						}
-						
-						moveBlockList.add(new BlockInfo(x - minX, y - minY, z - minZ, id, meta, nbt));
-						
-						blocksToRemove.add(new BlockToRemoveInfo(x, y, z, tile != null));
-					}
-				}
+			for (Entity entity : entitiesInSelection) {
+				if (entity instanceof EntityPlayer) continue;
+				
+				NBTTagCompound nbt = new NBTTagCompound();
+				entity.writeToNBT(nbt);
+				entities.add(new EntityInfo(new LocAndAngle(entity.posX - minX + x3,
+															entity.posY - minY + y3,
+															entity.posZ - minZ + z3,
+															entity.rotationYaw,
+															entity.rotationPitch), entity.getClass(), nbt));
+				
+				undoEntity1.add(new EntityInfo(new LocAndAngle(entity.posX,
+															   entity.posY,
+															   entity.posZ,
+															   entity.rotationYaw,
+															   entity.rotationPitch), entity.getClass(), nbt));
 			}
+		
+			
+			copyRemoveBlockSelection(minY,
+					  maxY,
+					  minX,
+					  maxX,
+					  minZ,
+					  maxZ,
+					  world,
+					  undoNonBlock1,
+					  undoBlock1,
+					  moveBlockList,
+					  blocksToRemove);
 			
 			List<BlockInfo> nonBlockList = new ArrayList<>();
 			Queue<BlockInfo> blockList = new LinkedList<>();
+			
+			minX = Integer.MAX_VALUE;
+			minY = Integer.MAX_VALUE;
+			minZ = Integer.MAX_VALUE;
+			maxX = Integer.MIN_VALUE;
+			maxY = Integer.MIN_VALUE;
+			maxZ = Integer.MIN_VALUE;
 			
 			for (BlockInfo info : moveBlockList) {
 				int x = info.x() + x3;
@@ -168,48 +139,48 @@ public class Move extends CommandBase {
 				maxY = Math.max(maxY, y);
 				maxZ = Math.max(maxZ, z);
 				
-				BlockInfo pasteInfo = new BlockInfo(x, y, z, info.id(), info.meta(), info.tile());
-				
-				Block block = Block.blocksList[info.id()];
-				
-				if (block != null) {
-					if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-							block instanceof BlockFluid ||
-							block.isFallingBlock() ||
-							!block.canPlaceBlockAt(world, 0, 254, 0))) {
-						nonBlockList.add(pasteInfo);
-					}
-					else {
-						blockList.add(pasteInfo);
-					}
-				}
-				else {
-					blockList.add(pasteInfo);
-				}
+				saveBlockToPlace(info, x, y, z, world, nonBlockList, blockList);
+				saveBlockReplaced(world, x, y, z, undoNonBlock, undoBlock);
 			}
 			
-			Selection selection = new Selection(new BlockPos(minX, minY, minZ),
+			Selection selection2 = new Selection(new BlockPos(minX, minY, minZ),
 												new BlockPos(maxX, maxY, maxZ));
+			
+			saveReplacedEntities(world, player, selection2, undoEntity);
+			
+			undoBlock.addAll(undoBlock1);
+			undoNonBlock.addAll(undoNonBlock1);
+			undoEntity.addAll(undoEntity1);
+			
 			SavedLists edit = new SavedLists(new ArrayList<>(nonBlockList),
 											 new LinkedList<>(blockList),
 											 new LinkedList<>(),
 											 new ArrayList<>(entities),
 											 new LinkedList<>(blocksToRemove));
-			editList.add(new QueueInfo("move", selection,
+			SavedLists undo = new SavedLists(new ArrayList<>(undoNonBlock),
+											 new LinkedList<>(undoBlock),
+											 new LinkedList<>(),
+											 new ArrayList<>(undoEntity),
+											 new LinkedList<>());
+			
+			List<Selection> selections = new ArrayList<>();
+			selections.add(selection1);
+			selections.add(selection2);
+			
+			editList.add(new QueueInfo("move",
+									   selections,
 									   edit,
-									   createEmptySavedList(),
+									   undo,
 									   duplicateSavedList(edit),
-									   minY,
 									   new int[SAVED_NUM],
-									   player,
-									   false));
+									   player));
 			
 			sendEditMsg(sender,
 						StatCollector.translateToLocal("commands.prefix") +
 								StatCollector.translateToLocal("commands.move"));
 		}
 		catch (Exception e) {
-			HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.error"));
+			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.error"));
 			throw new RuntimeException(e);
 		}
 	}

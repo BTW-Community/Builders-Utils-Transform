@@ -6,7 +6,6 @@ import net.minecraft.src.*;
 import java.util.*;
 
 import static net.dravigen.creative_tools.api.ToolHelper.*;
-import static net.dravigen.creative_tools.api.HelperCommand.*;
 
 public class Paste extends CommandBase {
 	@Override
@@ -32,12 +31,6 @@ public class Paste extends CommandBase {
 	
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
-		if (strings.length > 3) {
-			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
-			
-			return;
-		}
-		
 		if (copyBlockList.isEmpty() && copyEntityList.isEmpty()) {
 			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.copy/paste"));
 			
@@ -58,9 +51,14 @@ public class Paste extends CommandBase {
 				   ? Integer.parseInt(strings[0].split("/")[2])
 				   : MathHelper.floor_double(player.posZ);
 		
-		List<BlockInfo> pasteNonBlockList = new ArrayList<>();
-		Queue<BlockInfo> pasteBlockList = new LinkedList<>();
+		List<BlockInfo> nonBlockList = new ArrayList<>();
+		Queue<BlockInfo> blockList = new LinkedList<>();
 		List<EntityInfo> entities = new ArrayList<>();
+		
+		List<BlockInfo> undoNonBlock = new ArrayList<>();
+		Queue<BlockInfo> undoBlock = new LinkedList<>();
+		List<EntityInfo> undoEntity = new ArrayList<>();
+		Queue<BlockToRemoveInfo> undoBlocksToRemove = new LinkedList<>();
 		
 		int minX = Integer.MAX_VALUE;
 		int minY = Integer.MAX_VALUE;
@@ -69,16 +67,7 @@ public class Paste extends CommandBase {
 		int maxY = Integer.MIN_VALUE;
 		int maxZ = Integer.MIN_VALUE;
 		
-		if (!copyEntityList.isEmpty()) {
-			for (EntityInfo entity : copyEntityList) {
-				LocAndAngle locAndAngle = entity.locAndAngle();
-				entities.add(new EntityInfo(new LocAndAngle(locAndAngle.x() + xLoc,
-															locAndAngle.y() + yLoc,
-															locAndAngle.z() + zLoc,
-															locAndAngle.yaw(),
-															locAndAngle.pitch()), entity.entityClass(), entity.nbt()));
-			}
-		}
+		saveEntitiesToPlace(copyEntityList, entities, xLoc, yLoc, zLoc);
 		
 		for (BlockInfo info : copyBlockList) {
 			int x = info.x() + xLoc;
@@ -92,43 +81,40 @@ public class Paste extends CommandBase {
 			maxY = Math.max(maxY, y);
 			maxZ = Math.max(maxZ, z);
 			
-			BlockInfo pasteInfo = new BlockInfo(x, y, z, info.id(), info.meta(), info.tile());
-			
-			Block block = Block.blocksList[info.id()];
-			
-			if (block != null) {
-				if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-						block instanceof BlockFluid ||
-						block.isFallingBlock() ||
-						!block.canPlaceBlockAt(world, 0, 254, 0))) {
-					pasteNonBlockList.add(pasteInfo);
-				}
-				else {
-					pasteBlockList.add(pasteInfo);
-				}
-			}
-			else {
-				pasteBlockList.add(pasteInfo);
-			}
+			saveBlockToPlace(info, x, y, z, world, nonBlockList, blockList);
+			saveBlockReplaced(world, x, y, z, undoNonBlock, undoBlock);
 		}
 		
-		sendEditMsg(sender,
-					StatCollector.translateToLocal("commands.prefix") +
-							StatCollector.translateToLocal("commands.paste"));
 		Selection selection = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
-		SavedLists edit = new SavedLists(new ArrayList<>(pasteNonBlockList),
-										 new LinkedList<>(pasteBlockList),
+		List<Selection> selections = new ArrayList<>();
+		selections.add(selection);
+		
+		saveReplacedEntities(world, player, selection, undoEntity);
+		
+		SavedLists edit = new SavedLists(new ArrayList<>(nonBlockList),
+										 new LinkedList<>(blockList),
 										 new LinkedList<>(),
 										 new ArrayList<>(entities),
 										 new LinkedList<>());
+		SavedLists undo = new SavedLists(new ArrayList<>(undoNonBlock),
+										 new LinkedList<>(undoBlock),
+										 new LinkedList<>(),
+										 new ArrayList<>(undoEntity),
+										 new LinkedList<>(undoBlocksToRemove));
+		Result result = new Result(edit, undo);
+		
 		editList.add(new QueueInfo("paste",
-								   selection,
-								   edit,
-								   createEmptySavedList(),
-								   duplicateSavedList(edit),
-								   yLoc,
+								   selections,
+								   result.edit(),
+								   result.undo(),
+								   duplicateSavedList(result.edit()),
 								   new int[SAVED_NUM],
-								   player,
-								   false));
+								   player));
+	
+		sendEditMsg(sender,
+					StatCollector.translateToLocal("commands.prefix") +
+							StatCollector.translateToLocal("commands.paste"));
 	}
+	
+	private record Result(SavedLists edit, SavedLists undo) {}
 }

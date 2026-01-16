@@ -4,8 +4,6 @@ import net.minecraft.src.CommandBase;
 import net.minecraft.src.ICommandSender;
 import net.minecraft.src.StatCollector;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
-import static net.dravigen.creative_tools.api.HelperCommand.sendErrorMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 
 public class Redo extends CommandBase {

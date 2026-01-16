@@ -1,15 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
 import api.world.BlockPos;
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.src.*;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 import static net.dravigen.creative_tools.api.ToolHelper.copyBlockList;
 import static net.dravigen.creative_tools.api.ToolHelper.copyEntityList;
@@ -41,7 +36,7 @@ public class Cut extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		if (strings.length == 0 && (pos1 == null || pos2 == null)) {
-			HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
 			
 			return;
 		}
@@ -69,6 +64,9 @@ public class Cut extends CommandBase {
 		
 		Selection selection = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
 		
+		List<Selection> selections = new ArrayList<>();
+		selections.add(selection);
+		
 		List<Entity> entitiesInSelection = world.getEntitiesWithinAABBExcludingEntity(player,
 																					  new AxisAlignedBB(minX,
 																										minY,
@@ -81,69 +79,19 @@ public class Cut extends CommandBase {
 		Queue<BlockInfo> undoBlock = new LinkedList<>();
 		List<EntityInfo> undoEntity = new ArrayList<>();
 		
-		if (!entitiesInSelection.isEmpty()) {
-			for (Entity entity : entitiesInSelection) {
-				if (entity instanceof EntityPlayer) continue;
-				
-				NBTTagCompound nbt = new NBTTagCompound();
-				entity.writeToNBT(nbt);
-				copyEntityList.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
-																  entity.posY - minY,
-																  entity.posZ - minZ,
-																  entity.rotationYaw,
-																  entity.rotationPitch), entity.getClass(), nbt));
-				
-				undoEntity.add(new EntityInfo(new LocAndAngle(entity.posX,
-															  entity.posY,
-															  entity.posZ,
-															  entity.rotationYaw,
-															  entity.rotationPitch), entity.getClass(), nbt));
-			}
-		}
+		copyEntityInSelection(entitiesInSelection, copyEntityList, minX, minY, minZ, undoEntity);
 		
-		for (int y = minY; y <= maxY; y++) {
-			for (int x = minX; x <= maxX; x++) {
-				for (int z = minZ; z <= maxZ; z++) {
-					int id = world.getBlockId(x, y, z);
-					int meta = world.getBlockMetadata(x, y, z);
-					TileEntity tile = world.getBlockTileEntity(x, y, z);
-					
-					NBTTagCompound tileNBT = null;
-					
-					if (tile != null) {
-						tileNBT = new NBTTagCompound();
-						tile.writeToNBT(tileNBT);
-						tileNBT.removeTag("x");
-						tileNBT.removeTag("y");
-						tileNBT.removeTag("z");
-					}
-					
-					BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, tileNBT);
-					
-					Block block = Block.blocksList[id];
-					
-					if (block != null) {
-						if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-								block instanceof BlockFluid ||
-								block.isFallingBlock() ||
-								!block.canPlaceBlockAt(world, 0, 254, 0))) {
-							undoNonBlock.add(pasteInfo);
-						}
-						else {
-							undoBlock.add(pasteInfo);
-						}
-					}
-					else {
-						undoBlock.add(pasteInfo);
-					}
-					
-					copyBlockList.add(new BlockInfo(x - minX, y - minY, z - minZ, id, meta, tileNBT));
-					
-					blocksToRemove.add(new BlockToRemoveInfo(x, y, z, tile != null));
-				}
-			}
-		}
-		
+		copyRemoveBlockSelection(minY,
+								 maxY,
+								 minX,
+								 maxX,
+								 minZ,
+								 maxZ,
+								 world,
+								 undoNonBlock,
+								 undoBlock,
+								 copyBlockList,
+								 blocksToRemove);
 		sendEditMsg(sender,
 					StatCollector.translateToLocal("commands.prefix") + StatCollector.translateToLocal("commands.cut"));
 		SavedLists edit = new SavedLists(new ArrayList<>(),
@@ -151,14 +99,19 @@ public class Cut extends CommandBase {
 										 new LinkedList<>(),
 										 new ArrayList<>(),
 										 new LinkedList<>(blocksToRemove));
-		editList.add(new QueueInfo("cut", selection,
+		SavedLists undo = new SavedLists(new ArrayList<>(undoNonBlock),
+										 new LinkedList<>(undoBlock),
+										 new LinkedList<>(),
+										 new ArrayList<>(undoEntity),
+										 new LinkedList<>());
+		
+		editList.add(new QueueInfo("cut",
+								   selections,
 								   edit,
-								   createEmptySavedList(),
+								   undo,
 								   duplicateSavedList(edit),
-								   minY,
 								   new int[SAVED_NUM],
-								   player,
-								   true));
+								   player));
 		
 	}
 }

@@ -1,15 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
 import api.world.BlockPos;
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.src.*;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 import static net.dravigen.creative_tools.api.ToolHelper.SAVED_NUM;
 
@@ -38,7 +33,7 @@ public class Remove extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		if (strings.length == 0 && (pos1 == null || pos2 == null)) {
-			HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
 			
 			return;
 		}
@@ -62,16 +57,25 @@ public class Remove extends CommandBase {
 		int maxZ = Math.max(z1, z2);
 		
 		Selection selection = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
+		List<Selection> selections = new ArrayList<>();
+		selections.add(selection);
 		
 		Queue<BlockToRemoveInfo> blocksToRemove = new LinkedList<>();
+		List<BlockInfo> undoNonBlock = new ArrayList<>();
+		Queue<BlockInfo> undoBlock = new LinkedList<>();
+		List<EntityInfo> undoEntity = new ArrayList<>();
 		
 		for (int y = minY; y <= maxY; y++) {
 			for (int x = minX; x <= maxX; x++) {
 				for (int z = minZ; z <= maxZ; z++) {
 					blocksToRemove.add(new BlockToRemoveInfo(x, y, z, world.blockHasTileEntity(x, y, z)));
+					
+					saveBlockReplaced(world, x, y, z, undoNonBlock, undoBlock);
 				}
 			}
 		}
+		
+		saveReplacedEntities(world, player, selection, undoEntity);
 		
 		sendEditMsg(sender,
 					StatCollector.translateToLocal("commands.prefix") +
@@ -81,14 +85,18 @@ public class Remove extends CommandBase {
 										 new LinkedList<>(),
 										 new ArrayList<>(),
 										 new LinkedList<>(blocksToRemove));
+		SavedLists undo = new SavedLists(new ArrayList<>(undoNonBlock),
+										 new LinkedList<>(undoBlock),
+										 new LinkedList<>(),
+										 new ArrayList<>(undoEntity),
+										 new LinkedList<>());
+		
 		editList.add(new QueueInfo("remove",
-								   selection,
+								   selections,
 								   edit,
-								   createEmptySavedList(),
+								   undo,
 								   duplicateSavedList(edit),
-								   minY,
 								   new int[SAVED_NUM],
-								   player,
-								   false));
+								   player));
 	}
 }

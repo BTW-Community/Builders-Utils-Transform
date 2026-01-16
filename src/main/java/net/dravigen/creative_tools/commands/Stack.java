@@ -1,15 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
 import api.world.BlockPos;
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.src.*;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 
 public class Stack extends CommandBase {
@@ -31,7 +26,7 @@ public class Stack extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		if (pos1 == null || pos2 == null) {
-			HelperCommand.sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
 			
 			return;
 		}
@@ -107,7 +102,6 @@ public class Stack extends CommandBase {
 																										maxZ + 1));
 		List<EntityInfo> entities = new ArrayList<>();
 		Queue<BlockInfo> moveBlockList = new LinkedList<>();
-		
 		List<BlockInfo> undoNonBlock = new ArrayList<>();
 		Queue<BlockInfo> undoBlock = new LinkedList<>();
 		List<EntityInfo> undoEntity = new ArrayList<>();
@@ -122,12 +116,6 @@ public class Stack extends CommandBase {
 															entity.posZ,
 															entity.rotationYaw,
 															entity.rotationPitch), entity.getClass(), nbt));
-				
-				undoEntity.add(new EntityInfo(new LocAndAngle(entity.posX,
-															  entity.posY,
-															  entity.posZ,
-															  entity.rotationYaw,
-															  entity.rotationPitch), entity.getClass(), nbt));
 			}
 		}
 		
@@ -180,21 +168,19 @@ public class Stack extends CommandBase {
 		int yDist = minY - maxY;
 		int zDist = minZ - maxZ;
 		
-		for (int i = 0; i <= stackNum; i++) {
+		minX = Integer.MAX_VALUE;
+		minY = Integer.MAX_VALUE;
+		minZ = Integer.MAX_VALUE;
+		maxX = Integer.MIN_VALUE;
+		maxY = Integer.MIN_VALUE;
+		maxZ = Integer.MIN_VALUE;
+		
+		for (int i = 1; i <= stackNum; i++) {
 			int x3 = (xP ? (-xDist + 1) * i : xN ? (xDist - 1) * i : 0);
 			int y3 = (yP ? (-yDist + 1) * i : yN ? (yDist - 1) * i : 0);
 			int z3 = (zP ? (-zDist + 1) * i : zN ? (zDist - 1) * i : 0);
 			
-			for (EntityInfo entity : entities) {
-				LocAndAngle locAndAngle = entity.locAndAngle();
-				entitiesToPaste.add(new EntityInfo(new LocAndAngle(locAndAngle.x() + x3,
-																   locAndAngle.y() + y3,
-																   locAndAngle.z() + z3,
-																   locAndAngle.yaw(),
-																   locAndAngle.pitch()),
-												   entity.entityClass(),
-												   entity.nbt()));
-			}
+			saveEntitiesToPlace(entities, entitiesToPaste, x3, y3, z3);
 			
 			for (BlockInfo info : moveBlockList) {
 				int x = info.x() + x3;
@@ -208,41 +194,35 @@ public class Stack extends CommandBase {
 				maxY = Math.max(maxY, y);
 				maxZ = Math.max(maxZ, z);
 				
-				BlockInfo pasteInfo = new BlockInfo(x, y, z, info.id(), info.meta(), info.tile());
-				
-				Block block = Block.blocksList[info.id()];
-				
-				if (block != null) {
-					if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-							block instanceof BlockFluid ||
-							block.isFallingBlock() ||
-							!block.canPlaceBlockAt(world, 0, 254, 0))) {
-						nonBlockList.add(pasteInfo);
-					}
-					else {
-						blockList.add(pasteInfo);
-					}
-				}
-				else {
-					blockList.add(pasteInfo);
-				}
+				saveBlockToPlace(info, x, y, z, world, nonBlockList, blockList);
+				saveBlockReplaced(world, x, y, z, undoNonBlock, undoBlock);
 			}
 		}
+		
+		
+		Selection selection = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
+		List<Selection> selections = new ArrayList<>();
+		selections.add(selection);
+		
+		saveReplacedEntities(world, player, selection, undoEntity);
 		
 		SavedLists edit = new SavedLists(new ArrayList<>(nonBlockList),
 										 new LinkedList<>(blockList),
 										 new LinkedList<>(),
-										 new ArrayList<>(entities),
+										 new ArrayList<>(entitiesToPaste),
 										 new LinkedList<>());
-		Selection selection = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
-		editList.add(new QueueInfo("stack", selection,
+		SavedLists undo = new SavedLists(new ArrayList<>(undoNonBlock),
+										 new LinkedList<>(undoBlock),
+										 new LinkedList<>(),
+										 new ArrayList<>(undoEntity),
+										 new LinkedList<>());
+		
+		editList.add(new QueueInfo("stack", selections,
 								   edit,
-								   createEmptySavedList(),
+								   undo,
 								   duplicateSavedList(edit),
-								   minY,
 								   new int[SAVED_NUM],
-								   player,
-								   false));
+								   player));
 	
 		sendEditMsg(sender, StatCollector.translateToLocal("commands.prefix") + String.format(StatCollector.translateToLocal("commands.stack"), stackNum, direction));
 	}

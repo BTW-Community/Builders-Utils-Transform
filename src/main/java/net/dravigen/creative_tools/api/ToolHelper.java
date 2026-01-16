@@ -11,18 +11,36 @@ import static net.minecraft.src.CommandBase.getPlayer;
 public class ToolHelper {
 	public record BlockInfo(int x, int y, int z, int id, int meta, NBTTagCompound tile) {}
 	public record BlockToRemoveInfo(int x, int y, int z, boolean hasTile) {}
-	public record QueueInfo(String id, Selection selection, SavedLists editList, SavedLists undoList, SavedLists redoList, int minY, int[] num, EntityPlayer player, boolean savedUndo) {}
+	public record QueueInfo(String id, List<Selection> selection, SavedLists editList, SavedLists undoList, SavedLists redoList, int[] num, EntityPlayer player) {}
 	public record EntityInfo(LocAndAngle locAndAngle, Class entityClass, NBTTagCompound nbt) {}
 	public record LocAndAngle(double x, double y, double z, float yaw, float pitch) {}
 	public record Selection(BlockPos pos1, BlockPos pos2) {}
 	public record SavedLists(List<BlockInfo> nonBlockList, Queue<BlockInfo> blockList, Queue<BlockInfo> allBlocks, List<EntityInfo> entities, Queue<BlockToRemoveInfo> blocksToRemove) {}
 	
 	public static SavedLists duplicateSavedList(SavedLists old) {
-		return new SavedLists(new ArrayList<>(old.nonBlockList), new LinkedList<>(old.blockList), new LinkedList<>(old.allBlocks), new ArrayList<>(old.entities), new LinkedList<>(old.blocksToRemove));
+		return new SavedLists(new ArrayList<>(old.nonBlockList),
+							  new LinkedList<>(old.blockList),
+							  null,
+							  new ArrayList<>(old.entities),
+							  new LinkedList<>(old.blocksToRemove));
 	}
 	
 	public static SavedLists createEmptySavedList() {
 		return new SavedLists(new ArrayList<>(), new LinkedList<>(), new LinkedList<>(), new ArrayList<>(), new LinkedList<>());
+	}
+	
+	public static void addSavedList(SavedLists holder, SavedLists toAdd) {
+		holder.blockList.addAll(toAdd.blockList);
+		holder.nonBlockList.addAll(toAdd.nonBlockList);
+		holder.entities.addAll(toAdd.entities);
+		holder.blocksToRemove.addAll(toAdd.blocksToRemove);
+	}
+	
+	public static void mergeQueue(QueueInfo holder, QueueInfo toMerge) {
+		addSavedList(holder.editList, toMerge.editList);
+		addSavedList(holder.undoList, toMerge.undoList);
+		addSavedList(holder.redoList, toMerge.redoList);
+		holder.selection.addAll(toMerge.selection);
 	}
 	
 	public static int SAVED_NUM = 4;
@@ -30,7 +48,7 @@ public class ToolHelper {
 	public static BlockPos pos1 = null;
 	public static BlockPos pos2 = null;
 	
-	public static List<BlockInfo> copyBlockList = new ArrayList<>();
+	public static Queue<BlockInfo> copyBlockList = new LinkedList<>();
 	public static List<EntityInfo> copyEntityList = new ArrayList<>();
 	public static List<QueueInfo> editList = new ArrayList<>();
 	public static List<QueueInfo> undoList = new ArrayList<>();
@@ -48,12 +66,178 @@ public class ToolHelper {
 			} catch (NoSuchFieldException ignored) {
 			}
 		} catch (Exception e) {
-			System.err.println("Failed to hook into Chunk.storageArrays!");
 			e.printStackTrace();
 		}
 		
 		storageArraysField = f;
 	}
+	
+	public static void saveReplacedEntities(World world, EntityPlayer player, Selection selection, List<EntityInfo> undoEntity) {
+		for (Object o : world.getEntitiesWithinAABBExcludingEntity(player,
+																   new AxisAlignedBB(selection.pos1().x,
+																					 selection.pos1().y,
+																					 selection.pos1().z,
+																					 selection.pos2().x + 1,
+																					 selection.pos2().y + 1,
+																					 selection.pos2().z + 1))) {
+			Entity entity = (Entity) o;
+			if (entity instanceof EntityPlayer) continue;
+			
+			NBTTagCompound nbt = new NBTTagCompound();
+			entity.writeToNBT(nbt);
+			undoEntity.add(new EntityInfo(new LocAndAngle(entity.posX,
+														  entity.posY,
+														  entity.posZ,
+														  entity.rotationYaw,
+														  entity.rotationPitch), entity.getClass(), nbt));
+		}
+	}
+	
+	public static void saveEntitiesToPlace(List<EntityInfo> entities, List<EntityInfo> entitiesToPaste, int x3, int y3, int z3) {
+		for (EntityInfo entity : entities) {
+			LocAndAngle locAndAngle = entity.locAndAngle();
+			entitiesToPaste.add(new EntityInfo(new LocAndAngle(locAndAngle.x() + x3,
+															   locAndAngle.y() + y3,
+															   locAndAngle.z() + z3,
+															   locAndAngle.yaw(),
+															   locAndAngle.pitch()),
+											   entity.entityClass(),
+											   entity.nbt()));
+		}
+	}
+	
+	public static void copyRemoveBlockSelection(int minY, int maxY, int minX, int maxX, int minZ, int maxZ, World world,
+			List<BlockInfo> undoNonBlock, Queue<BlockInfo> undoBlock, Queue<BlockInfo> moveBlockList,
+			Queue<BlockToRemoveInfo> blocksToRemove) {
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					int id = world.getBlockId(x, y, z);
+					int meta = world.getBlockMetadata(x, y, z);
+					TileEntity tile = world.getBlockTileEntity(x, y, z);
+					
+					NBTTagCompound nbt = null;
+					
+					if (tile != null) {
+						nbt = new NBTTagCompound();
+						tile.writeToNBT(nbt);
+						nbt.removeTag("x");
+						nbt.removeTag("y");
+						nbt.removeTag("z");
+					}
+					
+					BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, nbt);
+					
+					Block block = Block.blocksList[id];
+					
+					undoBlock.add(pasteInfo);
+
+					/*
+					if (block != null) {
+						if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
+								block instanceof BlockFluid ||
+								block.isFallingBlock() ||
+								!block.canPlaceBlockAt(world, 0, 254, 0))) {
+							undoNonBlock.add(pasteInfo);
+						}
+						else {
+							undoBlock.add(pasteInfo);
+						}
+					}
+					else {
+						undoBlock.add(pasteInfo);
+					}*/
+					
+					moveBlockList.add(new BlockInfo(x - minX, y - minY, z - minZ, id, meta, nbt));
+					
+					blocksToRemove.add(new BlockToRemoveInfo(x, y, z, tile != null));
+				}
+			}
+		}
+	}
+	
+	public static void copyEntityInSelection(List<Entity> entitiesInSelection, List<EntityInfo> entities, int minX, int minY,
+			int minZ, List<EntityInfo> undoEntity) {
+		for (Entity entity : entitiesInSelection) {
+			if (entity instanceof EntityPlayer) continue;
+			
+			NBTTagCompound nbt = new NBTTagCompound();
+			entity.writeToNBT(nbt);
+			entities.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
+														entity.posY - minY,
+														entity.posZ - minZ,
+														entity.rotationYaw,
+														entity.rotationPitch), entity.getClass(), nbt));
+			
+			undoEntity.add(new EntityInfo(new LocAndAngle(entity.posX,
+														  entity.posY,
+														  entity.posZ,
+														  entity.rotationYaw,
+														  entity.rotationPitch), entity.getClass(), nbt));
+		}
+	}
+	
+	public static void saveBlockReplaced(World world, int x, int y, int z, List<BlockInfo> undoNonBlock,
+			Queue<BlockInfo> undoBlock) {
+		int id = world.getBlockId(x, y, z);
+		int meta = world.getBlockMetadata(x, y, z);
+		TileEntity tile = world.getBlockTileEntity(x, y, z);
+		
+		NBTTagCompound nbt = null;
+		
+		if (tile != null) {
+			nbt = new NBTTagCompound();
+			tile.writeToNBT(nbt);
+			nbt.removeTag("x");
+			nbt.removeTag("y");
+			nbt.removeTag("z");
+		}
+		
+		BlockInfo pasteInfoUndo = new BlockInfo(x, y, z, id, meta, nbt);
+		
+		Block blockUndo = Block.blocksList[id];
+		
+		undoBlock.add(pasteInfoUndo);
+		/*
+		if (blockUndo != null) {
+			if ((!blockUndo.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
+					blockUndo instanceof BlockFluid ||
+					blockUndo.isFallingBlock() ||
+					!blockUndo.canPlaceBlockAt(world, 0, 254, 0))) {
+				undoNonBlock.add(pasteInfoUndo);
+			}
+			else {
+				undoBlock.add(pasteInfoUndo);
+			}
+		}
+		else {
+			undoBlock.add(pasteInfoUndo);
+		}*/
+	}
+	
+	
+	public static void saveBlockToPlace(BlockInfo info, int x, int y, int z, World world, List<BlockInfo> nonBlockList,
+			Queue<BlockInfo> blockList) {
+		BlockInfo pasteInfo = new BlockInfo(x, y, z, info.id(), info.meta(), info.tile());
+		
+		Block block = Block.blocksList[info.id()];
+		
+		if (block != null) {
+			if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
+					block instanceof BlockFluid ||
+					block.isFallingBlock() ||
+					!block.canPlaceBlockAt(world, 0, 254, 0))) {
+				nonBlockList.add(pasteInfo);
+			}
+			else {
+				blockList.add(pasteInfo);
+			}
+		}
+		else {
+			blockList.add(pasteInfo);
+		}
+	}
+	
 	
 	public static MovingObjectPosition getBlockPlayerIsLooking(ICommandSender sender) {
 		EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
@@ -71,105 +255,15 @@ public class ToolHelper {
 		}
 	}
 	
-	public static SavedLists createUndoList(World world, Selection selection, Queue<BlockToRemoveInfo> removeList) {
-		List<BlockInfo> nonBlockList = new ArrayList<>();
-		Queue<BlockInfo> blockList = new LinkedList<>();
-		
-		if (!removeList.isEmpty()) {
-			for (BlockToRemoveInfo info : removeList) {
-				int x = info.x();
-				int y = info.y();
-				int z = info.z();
-				
-				int id = world.getBlockId(x, y, z);
-				int meta = world.getBlockMetadata(x, y, z);
-				TileEntity tile = world.getBlockTileEntity(x, y, z);
-				
-				NBTTagCompound tileNBT = null;
-				
-				if (tile != null) {
-					tileNBT = new NBTTagCompound();
-					tile.writeToNBT(tileNBT);
-					tileNBT.removeTag("x");
-					tileNBT.removeTag("y");
-					tileNBT.removeTag("z");
-				}
-				
-				BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, tileNBT);
-				
-				Block block = Block.blocksList[id];
-				
-				if (block != null) {
-					if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-							block instanceof BlockFluid ||
-							block.isFallingBlock() ||
-							!block.canPlaceBlockAt(world, 0, 254, 0))) {
-						nonBlockList.add(pasteInfo);
-					}
-					else {
-						blockList.add(pasteInfo);
-					}
-				}
-				else {
-					blockList.add(pasteInfo);
-				}
-			}
-		}
-		
-		for (int y = selection.pos1().y; y <= selection.pos2().y; y++) {
-			for (int x = selection.pos1().x; x <= selection.pos2().x; x++) {
-				for (int z = selection.pos1().z; z <= selection.pos2().z; z++) {
-					int id = world.getBlockId(x, y, z);
-					int meta = world.getBlockMetadata(x, y, z);
-					TileEntity tile = world.getBlockTileEntity(x, y, z);
-					
-					NBTTagCompound tileNBT = null;
-					
-					if (tile != null) {
-						tileNBT = new NBTTagCompound();
-						tile.writeToNBT(tileNBT);
-						tileNBT.removeTag("x");
-						tileNBT.removeTag("y");
-						tileNBT.removeTag("z");
-					}
-					
-					BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, tileNBT);
-					
-					Block block = Block.blocksList[id];
-					
-					if (block != null) {
-						if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-								block instanceof BlockFluid ||
-								block.isFallingBlock() ||
-								!block.canPlaceBlockAt(world, 0, 254, 0))) {
-							nonBlockList.add(pasteInfo);
-						}
-						else {
-							blockList.add(pasteInfo);
-						}
-					}
-					else {
-						blockList.add(pasteInfo);
-					}
-				}
-			}
-		}
+	public static void sendMsg(ICommandSender sender, String msg) {
+		sender.sendChatToPlayer(ChatMessageComponent.createFromText(msg));
 	}
 	
+	public static void sendErrorMsg(ICommandSender sender, String msg) {
+		sender.sendChatToPlayer(ChatMessageComponent.createFromText("§c" + msg));
+	}
 	
-	/*
-	public static void removeBlock(World world, int x, int z, int y, boolean hasTile) {
-		Chunk chunk = world.getChunkFromChunkCoords(x >> 4, z >> 4);
-		
-		try {
-			ExtendedBlockStorage storage = ((ExtendedBlockStorage[]) storageArraysField.get(chunk))[y >> 4];
-			
-			storage.setExtBlockID(x & 0xF, y & 0xF, z & 0xF, 0);
-			world.markBlockForUpdate(x, y, z);
-
-			if (hasTile) world.removeBlockTileEntity(x, y, z);
-		} catch (Exception e) {
-			world.setBlock(x, y, z, 0, 0, 2);
-		}
-	}*/
+	public static void sendEditMsg(ICommandSender sender, String msg) {
+		sender.sendChatToPlayer(ChatMessageComponent.createFromText("§d" + msg));
+	}
 }

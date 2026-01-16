@@ -1,15 +1,10 @@
 package net.dravigen.creative_tools.commands;
 
-import net.minecraft.src.CommandBase;
-import net.minecraft.src.ICommandSender;
-import net.minecraft.src.MovingObjectPosition;
-import net.minecraft.src.StatCollector;
+import net.minecraft.src.*;
 
 import java.util.List;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
-import static net.dravigen.creative_tools.api.ToolHelper.getBlockPlayerIsLooking;
-import static net.dravigen.creative_tools.api.ToolHelper.pos2;
+import static net.dravigen.creative_tools.api.ToolHelper.*;
 
 public class Pos2 extends CommandBase {
 	@Override
@@ -35,9 +30,10 @@ public class Pos2 extends CommandBase {
 	
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
-		int x = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[0]) : pos2.x;
-		int y = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[1]) : pos2.y;
-		int z = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[2]) : pos2.z;
+		EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
+		int x = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[0]) : MathHelper.floor_double(player.posX);
+		int y = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[1]) : MathHelper.floor_double(player.posY);
+		int z = strings.length == 1 ? Integer.parseInt(strings[0].split("/")[2]) : MathHelper.floor_double(player.posZ);
 		
 		pos2.set(x, y, z);
 		sendEditMsg(sender, StatCollector.translateToLocal("commands.prefix") + String.format(StatCollector.translateToLocal("commands.pos2"), x, y, z));

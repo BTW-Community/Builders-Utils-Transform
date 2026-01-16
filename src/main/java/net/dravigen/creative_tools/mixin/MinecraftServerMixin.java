@@ -1,6 +1,5 @@
 package net.dravigen.creative_tools.mixin;
 
-import net.dravigen.creative_tools.api.HelperCommand;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.src.*;
 import org.spongepowered.asm.mixin.Mixin;
@@ -41,116 +40,24 @@ public abstract class MinecraftServerMixin {
 			boolean isEntitiesEmpty = entities == null || entities.isEmpty();
 			boolean isBlockEmpty = blockList == null || blockList.isEmpty();
 			boolean isNonBlockEmpty = nonBlockList == null || nonBlockList.isEmpty();
-			Selection selection = queueInfo.selection();
-			boolean savedUndo = queueInfo.savedUndo() || queueInfo.id().equals("undo");
+			boolean isAllBlocksEmpty = allBlocks == null || allBlocks.isEmpty();
+			List<Selection> selections = queueInfo.selection();
 			
 			int[] num = queueInfo.num();
 			
-			int totalEdit = num[0] + num[1] + num[2] + num[3];
-			for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
-																	   new AxisAlignedBB(selection.pos1().x,
-																						 selection.pos1().y,
-																						 selection.pos1().z,
-																						 selection.pos2().x + 1,
-																						 selection.pos2().y + 1,
-																						 selection.pos2().z + 1))) {
-				Entity entity = (Entity) o;
-				if (entity instanceof EntityPlayer) continue;
-				
-				if (!savedUndo && totalEdit == 0) {
-					NBTTagCompound nbt = new NBTTagCompound();
-					entity.writeToNBT(nbt);
-					undo.entities()
-							.add(new EntityInfo(new LocAndAngle(entity.posX,
-																entity.posY,
-																entity.posZ,
-																entity.rotationYaw,
-																entity.rotationPitch), entity.getClass(), nbt));
-				}
-				
-				entity.setDead();
-				num[3]++;
-			}
-			
-			if (!savedUndo) {
-				if (!removeList.isEmpty()) {
-					for (BlockToRemoveInfo info : removeList) {
-						int x = info.x();
-						int y = info.y();
-						int z = info.z();
-						
-						int id = world.getBlockId(x, y, z);
-						int meta = world.getBlockMetadata(x, y, z);
-						TileEntity tile = world.getBlockTileEntity(x, y, z);
-						
-						NBTTagCompound tileNBT = null;
-						
-						if (tile != null) {
-							tileNBT = new NBTTagCompound();
-							tile.writeToNBT(tileNBT);
-							tileNBT.removeTag("x");
-							tileNBT.removeTag("y");
-							tileNBT.removeTag("z");
-						}
-						
-						BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, tileNBT);
-						
-						Block block = Block.blocksList[id];
-						
-						if (block != null) {
-							if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-									block instanceof BlockFluid ||
-									block.isFallingBlock() ||
-									!block.canPlaceBlockAt(world, 0, 254, 0))) {
-								undo.nonBlockList().add(pasteInfo);
-							}
-							else {
-								undo.blockList().add(pasteInfo);
-							}
-						}
-						else {
-							undo.blockList().add(pasteInfo);
-						}
-					}
-				}
-				
-				for (int y = selection.pos1().y; y <= selection.pos2().y; y++) {
-					for (int x = selection.pos1().x; x <= selection.pos2().x; x++) {
-						for (int z = selection.pos1().z; z <= selection.pos2().z; z++) {
-							int id = world.getBlockId(x, y, z);
-							int meta = world.getBlockMetadata(x, y, z);
-							TileEntity tile = world.getBlockTileEntity(x, y, z);
-							
-							NBTTagCompound tileNBT = null;
-							
-							if (tile != null) {
-								tileNBT = new NBTTagCompound();
-								tile.writeToNBT(tileNBT);
-								tileNBT.removeTag("x");
-								tileNBT.removeTag("y");
-								tileNBT.removeTag("z");
-							}
-							
-							BlockInfo pasteInfo = new BlockInfo(x, y, z, id, meta, tileNBT);
-							
-							Block block = Block.blocksList[id];
-							
-							if (block != null) {
-								if ((!block.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-										block instanceof BlockFluid ||
-										block.isFallingBlock() ||
-										!block.canPlaceBlockAt(world, 0, 254, 0))) {
-									undo.nonBlockList().add(pasteInfo);
-								}
-								else {
-									undo.blockList().add(pasteInfo);
-								}
-							}
-							else {
-								undo.blockList().add(pasteInfo);
-							}
-						}
-					}
+			for (Selection selection : selections) {
+				for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
+																		   new AxisAlignedBB(selection.pos1().x,
+																							 selection.pos1().y,
+																							 selection.pos1().z,
+																							 selection.pos2().x + 1,
+																							 selection.pos2().y + 1,
+																							 selection.pos2().z + 1))) {
+					Entity entity = (Entity) o;
+					if (entity instanceof EntityPlayer) continue;
+					
+					entity.setDead();
+					num[3]++;
 				}
 			}
 			
@@ -180,7 +87,9 @@ public abstract class MinecraftServerMixin {
 						
 						BlockInfo block = blockList.poll();
 						
-						allBlocks.add(block);
+						if (allBlocks != null) {
+							allBlocks.add(block);
+						}
 						
 						int x = block.x();
 						int y = block.y();
@@ -194,7 +103,7 @@ public abstract class MinecraftServerMixin {
 						}
 						
 						try {
-							if (world.getBlockTileEntity(x, y, z) != null) {
+							if (world.blockHasTileEntity(x, y, z)) {
 								removeBlock(world, x, z, y, true);
 							}
 							
@@ -214,7 +123,9 @@ public abstract class MinecraftServerMixin {
 						int y = block.y();
 						int z = block.z();
 						
-						allBlocks.add(block);
+						if (allBlocks != null) {
+							allBlocks.add(block);
+						}
 						
 						if (world.getBlockId(x, y, z) == block.id() &&
 								world.getBlockMetadata(x, y, z) == block.meta() &&
@@ -239,7 +150,7 @@ public abstract class MinecraftServerMixin {
 					nonBlockList.clear();
 				}
 				
-				if (isNonBlockEmpty && isBlockEmpty) {
+				if (isNonBlockEmpty && isBlockEmpty && allBlocks != null) {
 					for (int i = 0; i < REMOVE_SPEED; i++) {
 						if (allBlocks.isEmpty()) break;
 						
@@ -270,33 +181,32 @@ public abstract class MinecraftServerMixin {
 			
 			editList.set(editList.indexOf(queueInfo),
 						 new QueueInfo(queueInfo.id(),
-									   selection,
+									   selections,
 									   edit,
 									   undo,
 									   queueInfo.redoList(),
-									   queueInfo.minY(),
 									   num,
-									   queueInfo.player(),
-									   true));
-		
-			if (removeList.isEmpty() && isNonBlockEmpty && isBlockEmpty && allBlocks.isEmpty()) {
+									   queueInfo.player()));
+			
+			if (removeList.isEmpty() && isNonBlockEmpty && isBlockEmpty && isAllBlocksEmpty) {
 				if (!isEntitiesEmpty) {
-					for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
-																			   new AxisAlignedBB(
-																					   selection.pos1().x,
-																					   selection.pos1().y,
-																					   selection.pos1().z,
-																					   selection.pos2().x +
-																							   1,
-																					   selection.pos2().y +
-																							   1,
-																					   selection.pos2().z +
-																							   1))) {
-						Entity entity = (Entity) o;
-						if (entity instanceof EntityPlayer) continue;
-						
-						entity.setDead();
-						num[3]++;
+					for (Selection selection : selections) {
+						for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
+																				   new AxisAlignedBB(selection.pos1().x,
+																									 selection.pos1().y,
+																									 selection.pos1().z,
+																									 selection.pos2().x +
+																											 1,
+																									 selection.pos2().y +
+																											 1,
+																									 selection.pos2().z +
+																											 1))) {
+							Entity entity = (Entity) o;
+							if (entity instanceof EntityPlayer) continue;
+							
+							entity.setDead();
+							num[3]++;
+						}
 					}
 					
 					for (EntityInfo info : entities) {
@@ -317,31 +227,31 @@ public abstract class MinecraftServerMixin {
 					entities.clear();
 				}
 				
-				for (int y = selection.pos1().y; y <= selection.pos2().y; y++) {
-					for (int x = selection.pos1().x; x <= selection.pos2().x; x++) {
-						for (int z = selection.pos1().z; z <= selection.pos2().z; z++) {
-							world.markBlockForUpdate(x, y, z);
+				for (Selection selection : selections) {
+					for (int y = selection.pos1().y; y <= selection.pos2().y; y++) {
+						for (int x = selection.pos1().x; x <= selection.pos2().x; x++) {
+							for (int z = selection.pos1().z; z <= selection.pos2().z; z++) {
+								world.markBlockForUpdate(x, y, z);
+							}
 						}
 					}
 				}
 				
-				if (totalEdit > 0) {
+				if (num[0] + num[1] + num[2] + num[3] > 0) {
 					if (!queueInfo.id().equals("undo")) {
 						undoList.add(new QueueInfo("undo",
-												   selection,
+												   selections,
 												   duplicateSavedList(undo),
 												   createEmptySavedList(),
 												   duplicateSavedList(queueInfo.redoList()),
-												   queueInfo.minY(),
 												   new int[SAVED_NUM],
-												   queueInfo.player(),
-												   true));
+												   queueInfo.player()));
 					}
 					
-					HelperCommand.sendEditMsg(queueInfo.player(), String.format(StatCollector.translateToLocal("commands.edit"), num[0] + num[2], num[1] + num[3], num[0], num[2], num[1], num[3]));
+					sendEditMsg(queueInfo.player(), String.format(StatCollector.translateToLocal("commands.edit"), num[0] + num[2], num[1] + num[3], num[0], num[2], num[1], num[3]));
 				}
 				else {
-					HelperCommand.sendErrorMsg(queueInfo.player(), String.format(StatCollector.translateToLocal("commands.error.edit")));
+					sendErrorMsg(queueInfo.player(), String.format(StatCollector.translateToLocal("commands.error.edit")));
 				}
 				
 				editList.remove(queueInfo);

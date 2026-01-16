@@ -7,7 +7,6 @@ import net.minecraft.src.StatCollector;
 
 import java.util.List;
 
-import static net.dravigen.creative_tools.api.HelperCommand.sendEditMsg;
 import static net.dravigen.creative_tools.api.ToolHelper.*;
 
 public class PosAll extends CommandBase {

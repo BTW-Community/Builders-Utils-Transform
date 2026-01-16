@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static net.dravigen.creative_tools.api.ToolHelper.*;
-import static net.dravigen.creative_tools.api.HelperCommand.*;
 
 @Mixin(EntityClientPlayerMP.class)
 public abstract class EntityClientPlayerMPMixin extends EntityPlayer{
