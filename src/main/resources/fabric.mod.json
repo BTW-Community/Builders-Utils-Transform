@@ -3,12 +3,12 @@
   "id": "bu_transform",
   "version": "${version}",
   "name": "Builder's Utils: Transform",
-  "description": "Every tools you would ever want when designing contraption or building structures",
+  "description": "Adds a variety of commands to easily move, duplicate, rotate builds",
   "authors": [
     "DraViGen"
   ],
   "contact": {
-    "homepage": "https://modrinth.com/mod/btw-addon-creative-tools",
+    "homepage": "https://modrinth.com/project/builders-utils-transform",
     "sources": "https://github.com/BTW-Community/Builders-Utils-Transform"
   },
   "license": "CC-BY-4.0",

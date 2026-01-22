@@ -13,16 +13,11 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Queue;
 
+import static net.dravigen.bu_transform.BU_Transform.SPEED;
 import static net.dravigen.bu_transform.api.ToolHelper.*;
 
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
-	@Unique
-	int SPEED = 100;
-	@Unique
-	int SPEED_UNDO = 1000;
-	@Unique
-	int REMOVE_SPEED = 500;
 
 	@Unique
 	private static void removeBlock(World world, int x, int z, int y, boolean hasTile) {
@@ -97,7 +92,7 @@ public abstract class MinecraftServerMixin {
 			QueueInfo queueInfo = editList.get(j);
 			int speed = SPEED;
 			if (queueInfo.id().equals("redo") || queueInfo.id().equals("undo")) {
-				speed = SPEED_UNDO;
+				speed = SPEED * 10;
 			}
 			
 			World world = queueInfo.player().getEntityWorld();
@@ -136,7 +131,7 @@ public abstract class MinecraftServerMixin {
 			}
 			
 			if (!removeList.isEmpty()) {
-				for (int i = 0; i < REMOVE_SPEED; i++) {
+				for (int i = 0; i < SPEED * 5; i++) {
 					if (removeList.isEmpty()) break;
 					BlockToRemoveInfo info = removeList.poll();
 					
@@ -225,7 +220,7 @@ public abstract class MinecraftServerMixin {
 				}
 				
 				if (isNonBlockEmpty && isBlockEmpty && allBlocks != null) {
-					for (int i = 0; i < REMOVE_SPEED; i++) {
+					for (int i = 0; i < SPEED * 5; i++) {
 						if (allBlocks.isEmpty()) break;
 						
 						BlockInfo block = allBlocks.poll();
