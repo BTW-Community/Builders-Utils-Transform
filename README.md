@@ -47,7 +47,7 @@ The selection will be highlighed with a framed box.
 
 ## Found a bug or have suggestions ?
 
-https://github.com/BTW-Community/Builders-Utils-Transform
+https://github.com/BTW-Community/Builders-Utils-Transform/issues
 
 ## Download: 
 https://modrinth.com/mod/builders-utils-transform/versions
