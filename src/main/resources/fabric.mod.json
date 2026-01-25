@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bu_transform",
   "version": "${version}",
-  "name": "Builder's Utils: Transform",
+  "name": "Builder's Utils: [Transform]",
   "description": "Adds a variety of commands to easily move, duplicate, rotate builds",
   "authors": [
     "DraViGen"
@@ -12,7 +12,7 @@
     "sources": "https://github.com/BTW-Community/Builders-Utils-Transform"
   },
   "license": "CC-BY-4.0",
-  "icon": "assets/bu_transform/icon.jpg",
+  "icon": "assets/bu_transform/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [

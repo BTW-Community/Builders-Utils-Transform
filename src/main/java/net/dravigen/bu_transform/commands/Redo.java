@@ -1,8 +1,8 @@
 package net.dravigen.bu_transform.commands;
 
+import net.dravigen.bu_transform.api.PacketUtils;
 import net.minecraft.src.CommandBase;
 import net.minecraft.src.ICommandSender;
-import net.minecraft.src.StatCollector;
 
 import java.util.List;
 
@@ -22,32 +22,39 @@ public class Redo extends CommandBase {
 	
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
-		if (!redoList.isEmpty()) {
-			for (QueueInfo queueInfo : editList) {
-				if (queueInfo.id().equals("undo") || queueInfo.id().equals("redo")) {
-					sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.process"));
-					
-					return;
+		try {
+			List<QueueInfo> redoList = redoPlayersMap.get(sender);
+			
+			if (!redoList.isEmpty()) {
+				for (QueueInfo queueInfo : editList) {
+					if (queueInfo.id().equals(sender.getCommandSenderName() + "|undo") ||
+							queueInfo.id().equals(sender.getCommandSenderName() + "|redo")) {
+						sendErrorMsg(sender, "commands.error.process");
+						
+						return;
+					}
 				}
+				
+				QueueInfo queueInfo = redoList.get(redoList.size() - 1);
+				redoList.remove(redoList.size() - 1);
+				editList.add(queueInfo);
+				
+				List<Selection> selection = queueInfo.selection();
+				
+				if (selection.size() > 1) {
+					pos1PlayersMap.put(sender, selection.get(1).pos1());
+					pos2PlayersMap.put(sender, selection.get(1).pos2());
+					PacketUtils.sendPosUpdate(1, sender, true);
+					PacketUtils.sendPosUpdate(2, sender, true);
+				}
+				
+				sendEditMsg(sender, "commands.redo");
 			}
-			
-			QueueInfo queueInfo = redoList.get(redoList.size() - 1);
-			redoList.remove(redoList.size() - 1);
-			editList.add(queueInfo);
-			
-			List<Selection> selection = queueInfo.selection();
-			
-			if (selection.size() > 1) {
-				pos1 = selection.get(1).pos1();
-				pos2 = selection.get(1).pos2();
+			else {
+				sendErrorMsg(sender, "commands.error.redo");
 			}
-			
-			sendEditMsg(sender,
-						StatCollector.translateToLocal("commands.prefix") +
-								String.format(StatCollector.translateToLocal("commands.redo")));
-		}
-		else {
-			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.redo"));
+		} catch (Exception e) {
+			throw new RuntimeException(e);
 		}
 	}
 }

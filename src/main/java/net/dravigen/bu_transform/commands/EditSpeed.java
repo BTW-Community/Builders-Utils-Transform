@@ -19,16 +19,20 @@ public class EditSpeed extends CommandBase {
 	
 	@Override
 	public void processCommand(ICommandSender iCommandSender, String[] strings) {
-		if (strings.length != 1) {
-			ToolHelper.sendErrorMsg(iCommandSender, "You need to enter a value");
+		try {
+			if (strings.length == 0) {
+				ToolHelper.sendEditMsg(iCommandSender, "commands.editSpeed", BU_Transform.SPEED);
+				
+				return;
+			}
 			
-			return;
+			int value = Integer.parseInt(strings[0]);
+			ConfigUpdater.updateValue(BU_Transform.instance.addonConfig, "bu_tr.editSpeed", value);
+			BU_Transform.SPEED = value;
+			
+			ToolHelper.sendEditMsg(iCommandSender, "Updated edit speed to: " + value);
+		} catch (NumberFormatException e) {
+			throw new RuntimeException(e);
 		}
-		
-		int value = Integer.parseInt(strings[0]);
-		ConfigUpdater.updateValue(BU_Transform.instance.addonConfig, "bu_tr.editSpeed", value);
-		BU_Transform.SPEED = value;
-		
-		ToolHelper.sendEditMsg(iCommandSender, "Updated edit speed to: " + value);
 	}
 }

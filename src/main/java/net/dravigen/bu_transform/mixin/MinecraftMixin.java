@@ -1,8 +1,10 @@
 package net.dravigen.bu_transform.mixin;
 
+import net.dravigen.bu_transform.api.ToolHelper;
 import net.minecraft.src.EntityClientPlayerMP;
 import net.minecraft.src.Item;
 import net.minecraft.src.Minecraft;
+import net.minecraft.src.WorldClient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -15,6 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class MinecraftMixin {
 	@Shadow
 	public EntityClientPlayerMP thePlayer;
+	@Shadow
+	public WorldClient theWorld;
 	
 	@Shadow
 	protected abstract void sendClickBlockToController(int par1, boolean par2);
@@ -34,6 +38,14 @@ public abstract class MinecraftMixin {
 	@Inject(method = "clickMiddleMouseButton", at = @At("HEAD"), cancellable = true)
 	private void preventMiddleClick(CallbackInfo ci) {
 		if (hasSelectionTool()) ci.cancel();
+	}
+	
+	@Inject(method = "runGameLoop", at = @At("HEAD"))
+	private void resetPosWhenOutWorld(CallbackInfo ci) {
+		if (this.theWorld == null && (ToolHelper.pos1 != null || ToolHelper.pos2 != null)) {
+			ToolHelper.pos1 = null;
+			ToolHelper.pos2 = null;
+		}
 	}
 	
 	@Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/src/Minecraft;sendClickBlockToController(IZ)V"))

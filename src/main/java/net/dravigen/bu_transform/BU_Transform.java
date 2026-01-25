@@ -45,6 +45,7 @@ public class BU_Transform extends BTWAddon {
 		registerAddonCommand(new Undo());
 		registerAddonCommand(new Redo());
 		registerAddonCommand(new Rotate());
-		registerAddonCommand(new EditSpeed());
+		
+		registerAddonCommandClientOnly(new EditSpeed());
 	}
 }

@@ -1,6 +1,7 @@
 package net.dravigen.bu_transform.commands;
 
 import api.world.BlockPos;
+import net.dravigen.bu_transform.api.PacketUtils;
 import net.minecraft.src.*;
 
 import java.util.ArrayList;
@@ -24,13 +25,28 @@ public class Move extends CommandBase {
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
 		try {
+			BlockPos pos1 = pos1PlayersMap.get(sender);
+			BlockPos pos2 = pos2PlayersMap.get(sender);
+			
 			if (pos1 == null || pos2 == null) {
-				sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+				sendErrorMsg(sender, "commands.error.selectionArea");
 				
 				return;
 			}
 			
-			redoList.clear();
+			if (strings.length == 1) {
+				sendErrorMsg(sender, "commands.error.selection1");
+				
+				return;
+			}
+			
+			if (strings.length == 2 && strings[1].split("/").length != 3) {
+				sendErrorMsg(sender, "commands.error.format");
+				
+				return;
+			}
+			
+			redoPlayersMap.get(sender).clear();
 			World world = sender.getEntityWorld();
 			EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
 			
@@ -48,9 +64,15 @@ public class Move extends CommandBase {
 			int maxY = Math.max(y1, y2);
 			int maxZ = Math.max(z1, z2);
 			
-			int x3 = Integer.parseInt(strings[1].split("/")[0]) + (strings[0].equalsIgnoreCase("add") ? minX : 0);
-			int y3 = Integer.parseInt(strings[1].split("/")[1]) + (strings[0].equalsIgnoreCase("add") ? minY : 0);
-			int z3 = Integer.parseInt(strings[1].split("/")[2]) + (strings[0].equalsIgnoreCase("add") ? minZ : 0);
+			int x3 = strings.length == 0
+					 ? MathHelper.floor_double(player.posX)
+					 : Integer.parseInt(strings[1].split("/")[0]) + (strings[0].equalsIgnoreCase("add") ? minX : 0);
+			int y3 = strings.length == 0
+					 ? MathHelper.floor_double(player.posY)
+					 : Integer.parseInt(strings[1].split("/")[1]) + (strings[0].equalsIgnoreCase("add") ? minY : 0);
+			int z3 = strings.length == 0
+					 ? MathHelper.floor_double(player.posZ)
+					 : Integer.parseInt(strings[1].split("/")[2]) + (strings[0].equalsIgnoreCase("add") ? minZ : 0);
 			
 			Selection selection1 = new Selection(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
 			
@@ -66,7 +88,6 @@ public class Move extends CommandBase {
 			Queue<BlockToRemoveInfo> blocksToRemove = new LinkedList<>();
 			Queue<BlockInfo> moveBlockList = new LinkedList<>();
 			
-			List<BlockInfo> undoNonBlock1 = new ArrayList<>();
 			Queue<BlockInfo> undoBlock1 = new LinkedList<>();
 			List<EntityInfo> undoEntity1 = new ArrayList<>();
 			List<BlockInfo> undoNonBlock = new ArrayList<>();
@@ -99,9 +120,7 @@ public class Move extends CommandBase {
 									 maxX,
 									 minZ,
 									 maxZ,
-									 world,
-									 undoNonBlock1,
-									 undoBlock1,
+									 world, undoBlock1,
 									 moveBlockList,
 									 blocksToRemove);
 			
@@ -128,18 +147,19 @@ public class Move extends CommandBase {
 				maxZ = Math.max(maxZ, z);
 				
 				saveBlockToPlace(info, x, y, z, world, nonBlockList, blockList);
-				saveBlockReplaced(world, x, y, z, undoNonBlock, undoBlock);
+				saveBlockReplaced(world, x, y, z, undoBlock);
 			}
 			
-			pos1 = new BlockPos(minX, minY, minZ);
-			pos2 = new BlockPos(maxX, maxY, maxZ);
+			pos1PlayersMap.put(sender, new BlockPos(minX, minY, minZ));
+			pos2PlayersMap.put(sender, new BlockPos(maxX, maxY, maxZ));
+			PacketUtils.sendPosUpdate(1, sender, true);
+			PacketUtils.sendPosUpdate(2, sender, true);
 			
 			Selection selection2 = new Selection(pos1, pos2);
 			
 			saveReplacedEntities(world, player, selection2, undoEntity);
 			
 			undoBlock.addAll(undoBlock1);
-			undoNonBlock.addAll(undoNonBlock1);
 			undoEntity.addAll(undoEntity1);
 			
 			SavedLists edit = new SavedLists(new ArrayList<>(nonBlockList),
@@ -165,18 +185,15 @@ public class Move extends CommandBase {
 									   new int[SAVED_NUM],
 									   player));
 			
-			sendEditMsg(sender,
-						StatCollector.translateToLocal("commands.prefix") +
-								StatCollector.translateToLocal("commands.move"));
+			sendEditMsg(sender, "commands.move");
 		} catch (Exception e) {
-			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.error"));
 			throw new RuntimeException(e);
 		}
 	}
 	
 	@Override
 	public List addTabCompletionOptions(ICommandSender sender, String[] strings) {
-		MovingObjectPosition block = getBlockPlayerIsLooking(sender);
+		MovingObjectPosition block = getBlockSenderIsLooking(sender);
 		if (strings.length == 1) {
 			return getListOfStringsMatchingLastWord(strings, "to", "add");
 		}

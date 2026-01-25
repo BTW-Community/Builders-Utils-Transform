@@ -7,10 +7,7 @@ import net.minecraft.src.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
 import static net.minecraft.src.CommandBase.getPlayer;
 
@@ -19,11 +16,14 @@ public class ToolHelper {
 	public static int SAVED_NUM = 4;
 	public static BlockPos pos1 = null;
 	public static BlockPos pos2 = null;
-	public static Queue<BlockInfo> copyBlockList = new LinkedList<>();
-	public static List<EntityInfo> copyEntityList = new ArrayList<>();
 	public static List<QueueInfo> editList = new ArrayList<>();
-	public static List<QueueInfo> undoList = new ArrayList<>();
-	public static List<QueueInfo> redoList = new ArrayList<>();
+	
+	public static Map<ICommandSender, Queue<BlockInfo>> copyBlockPlayersMap = new HashMap<>();
+	public static Map<ICommandSender, List<EntityInfo>> copyEntityPlayersMap = new HashMap<>();
+	public static Map<ICommandSender, BlockPos> pos1PlayersMap = new HashMap<>();
+	public static Map<ICommandSender, BlockPos> pos2PlayersMap = new HashMap<>();
+	public static Map<ICommandSender, List<QueueInfo>> undoPlayersMap = new HashMap<>();
+	public static Map<ICommandSender, List<QueueInfo>> redoPlayersMap = new HashMap<>();
 	
 	static {
 		Field f = null;
@@ -55,20 +55,6 @@ public class ToolHelper {
 							  new LinkedList<>(),
 							  new ArrayList<>(),
 							  new LinkedList<>());
-	}
-	
-	public static void addSavedList(SavedLists holder, SavedLists toAdd) {
-		holder.blockList.addAll(toAdd.blockList);
-		holder.nonBlockList.addAll(toAdd.nonBlockList);
-		holder.entities.addAll(toAdd.entities);
-		holder.blocksToRemove.addAll(toAdd.blocksToRemove);
-	}
-	
-	public static void mergeQueue(QueueInfo holder, QueueInfo toMerge) {
-		addSavedList(holder.editList, toMerge.editList);
-		addSavedList(holder.undoList, toMerge.undoList);
-		addSavedList(holder.redoList, toMerge.redoList);
-		holder.selection.addAll(toMerge.selection);
 	}
 	
 	public static void saveReplacedEntities(World world, EntityPlayer player, Selection selection,
@@ -108,7 +94,7 @@ public class ToolHelper {
 	}
 	
 	public static void copyRemoveBlockSelection(int minY, int maxY, int minX, int maxX, int minZ, int maxZ, World world,
-			List<BlockInfo> undoNonBlock, Queue<BlockInfo> undoBlock, Queue<BlockInfo> moveBlockList,
+			Queue<BlockInfo> undoBlock, Queue<BlockInfo> moveBlockList,
 			Queue<BlockToRemoveInfo> blocksToRemove) {
 		for (int y = minY; y <= maxY; y++) {
 			for (int x = minX; x <= maxX; x++) {
@@ -274,8 +260,7 @@ public class ToolHelper {
 		}
 	}
 	
-	public static void saveBlockReplaced(World world, int x, int y, int z, List<BlockInfo> undoNonBlock,
-			Queue<BlockInfo> undoBlock) {
+	public static void saveBlockReplaced(World world, int x, int y, int z, Queue<BlockInfo> undoBlock) {
 		getBlocksInfo result = getGetBlocksInfo(world, x, y, z);
 		int id = result.id;
 		int meta = result.meta;
@@ -292,24 +277,7 @@ public class ToolHelper {
 		
 		BlockInfo pasteInfoUndo = new BlockInfo(x, y, z, id, meta, nbt);
 		
-		Block blockUndo = Block.blocksList[id];
-		
 		undoBlock.add(pasteInfoUndo);
-		/*
-		if (blockUndo != null) {
-			if ((!blockUndo.canPlaceBlockOnSide(world, 0, 254, 0, 1) ||
-					blockUndo instanceof BlockFluid ||
-					blockUndo.isFallingBlock() ||
-					!blockUndo.canPlaceBlockAt(world, 0, 254, 0))) {
-				undoNonBlock.add(pasteInfoUndo);
-			}
-			else {
-				undoBlock.add(pasteInfoUndo);
-			}
-		}
-		else {
-			undoBlock.add(pasteInfoUndo);
-		}*/
 	}
 	
 	public static void saveBlockToPlace(BlockInfo info, int x, int y, int z, World world, List<BlockInfo> nonBlockList,
@@ -334,8 +302,13 @@ public class ToolHelper {
 		}
 	}
 	
-	public static MovingObjectPosition getBlockPlayerIsLooking(ICommandSender sender) {
+	public static MovingObjectPosition getBlockSenderIsLooking(ICommandSender sender) {
 		EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
+		
+		return getBlockPlayerIsLooking(player);
+	}
+	
+	public static MovingObjectPosition getBlockPlayerIsLooking(EntityPlayer player) {
 		Vec3 var3 = player.getPosition(1);
 		var3.yCoord += player.getEyeHeight();
 		Vec3 var4 = player.getLookVec();
@@ -350,16 +323,27 @@ public class ToolHelper {
 		}
 	}
 	
-	public static void sendMsg(ICommandSender sender, String msg) {
-		sender.sendChatToPlayer(ChatMessageComponent.createFromText(msg));
-	}
-	
 	public static void sendErrorMsg(ICommandSender sender, String msg) {
-		sender.sendChatToPlayer(ChatMessageComponent.createFromText("§c" + msg));
+		sender.sendChatToPlayer(ChatMessageComponent.createFromTranslationKey(msg).setColor(EnumChatFormatting.RED));
 	}
 	
 	public static void sendEditMsg(ICommandSender sender, String msg) {
-		sender.sendChatToPlayer(ChatMessageComponent.createFromText("§d" + msg));
+		ChatMessageComponent component = ChatMessageComponent.createFromTranslationKey("commands.prefix");
+		
+		component.addKey(msg);
+		
+		sender.sendChatToPlayer(component.setColor(EnumChatFormatting.LIGHT_PURPLE));
+	}
+	
+	public static void sendEditMsg(ICommandSender sender, String msg, Object... args) {
+		ChatMessageComponent component = ChatMessageComponent.createFromTranslationKey("commands.prefix");
+		
+		ChatMessageComponent core = ChatMessageComponent.createFromTranslationWithSubstitutions(msg, args);
+		
+		ChatMessageComponent combined = ChatMessageComponent.createFromTranslationWithSubstitutions("%s%s",
+																									component,
+																									core);
+		sender.sendChatToPlayer(combined.setColor(EnumChatFormatting.LIGHT_PURPLE));
 	}
 	
 	public record BlockInfo(int x, int y, int z, int id, int meta, NBTTagCompound tile) {}

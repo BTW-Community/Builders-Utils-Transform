@@ -1,8 +1,10 @@
 package net.dravigen.bu_transform.commands;
 
+import api.world.BlockPos;
 import net.minecraft.src.*;
 
 import java.util.List;
+import java.util.Queue;
 
 import static net.dravigen.bu_transform.api.ToolHelper.*;
 
@@ -20,14 +22,25 @@ public class Copy extends CommandBase {
 	
 	@Override
 	public void processCommand(ICommandSender sender, String[] strings) {
+		BlockPos pos1 = pos1PlayersMap.get(sender);
+		BlockPos pos2 = pos2PlayersMap.get(sender);
+		
 		if (strings.length == 0 && (pos1 == null || pos2 == null)) {
-			sendErrorMsg(sender, StatCollector.translateToLocal("commands.error.selection2"));
+			sendErrorMsg(sender, "commands.error.selection2");
 			
 			return;
 		}
 		
-		copyBlockList.clear();
-		copyEntityList.clear();
+		if (strings.length == 1 && strings[0].split("/").length != 3) {
+			sendErrorMsg(sender, "commands.error.format");
+			
+			return;
+		}
+		
+		Queue<BlockInfo> copyBlocks = copyBlockPlayersMap.get(sender);
+		List<EntityInfo> copyEntity = copyEntityPlayersMap.get(sender);
+		copyBlocks.clear();
+		copyEntity.clear();
 		
 		World world = sender.getEntityWorld();
 		EntityPlayer player = getPlayer(sender, sender.getCommandSenderName());
@@ -61,11 +74,11 @@ public class Copy extends CommandBase {
 			if (entity instanceof EntityPlayer) continue;
 			NBTTagCompound nbt = new NBTTagCompound();
 			entity.writeToNBT(nbt);
-			copyEntityList.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
-															  entity.posY - minY,
-															  entity.posZ - minZ,
-															  entity.rotationYaw,
-															  entity.rotationPitch), entity.getClass(), nbt));
+			copyEntity.add(new EntityInfo(new LocAndAngle(entity.posX - minX,
+														  entity.posY - minY,
+														  entity.posZ - minZ,
+														  entity.rotationYaw,
+														  entity.rotationPitch), entity.getClass(), nbt));
 			entityNum++;
 		}
 		
@@ -87,21 +100,19 @@ public class Copy extends CommandBase {
 						tileNBT.removeTag("z");
 					}
 					
-					copyBlockList.add(new BlockInfo(x - minX, y - minY, z - minZ, id, meta, tileNBT));
+					copyBlocks.add(new BlockInfo(x - minX, y - minY, z - minZ, id, meta, tileNBT));
 					
 					blockNum++;
 				}
 			}
 		}
 		
-		sendEditMsg(sender,
-					StatCollector.translateToLocal("commands.prefix") +
-							String.format(StatCollector.translateToLocal("commands.copy"), blockNum, entityNum));
+		sendEditMsg(sender, "commands.copy", blockNum, entityNum);
 	}
 	
 	@Override
 	public List addTabCompletionOptions(ICommandSender sender, String[] strings) {
-		MovingObjectPosition block = getBlockPlayerIsLooking(sender);
+		MovingObjectPosition block = getBlockSenderIsLooking(sender);
 		
 		if (block != null && strings.length < 3) {
 			return getListOfStringsMatchingLastWord(strings, block.blockX + "/" + block.blockY + "/" + block.blockZ);

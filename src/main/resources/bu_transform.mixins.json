@@ -4,15 +4,17 @@
   "package": "net.dravigen.bu_transform.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
-    "AxeItemMixin",
     "MinecraftServerMixin",
+    "NetServerHandlerMixin",
     "RenderGlobalMixin",
+    "ServerConfigurationManagerMixin",
     "TileEntityChestMixin",
     "TileEntityRendererMixin"
   ],
   "client": [
     "EntityClientPlayerMPMixin",
-    "MinecraftMixin"
+    "MinecraftMixin",
+    "NetClientHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -3,7 +3,6 @@ package net.dravigen.bu_transform.mixin;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.src.*;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -18,7 +17,7 @@ import static net.dravigen.bu_transform.api.ToolHelper.*;
 
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
-
+	
 	@Unique
 	private static void removeBlock(World world, int x, int z, int y, boolean hasTile) {
 		if (world.isAirBlock(x, y, z)) return;
@@ -81,21 +80,18 @@ public abstract class MinecraftServerMixin {
 		tile.readFromNBT(pasteNbt);
 	}
 	
-	@Shadow
-	public abstract boolean isSinglePlayer();
-	
 	@Inject(method = "tick", at = @At("HEAD"))
 	private void tick(CallbackInfo ci) {
-		if (!this.isSinglePlayer()) return;
-		
 		for (int j = 0; j < editList.size(); j++) {
 			QueueInfo queueInfo = editList.get(j);
 			int speed = SPEED;
-			if (queueInfo.id().equals("redo") || queueInfo.id().equals("undo")) {
+			
+			if (queueInfo.id().contains("redo") || queueInfo.id().contains("undo")) {
 				speed = SPEED * 10;
 			}
 			
-			World world = queueInfo.player().getEntityWorld();
+			EntityPlayer player = queueInfo.player();
+			World world = player.getEntityWorld();
 			
 			SavedLists edit = queueInfo.editList();
 			SavedLists undo = queueInfo.undoList();
@@ -115,7 +111,7 @@ public abstract class MinecraftServerMixin {
 			int[] num = queueInfo.num();
 			
 			for (Selection selection : selections) {
-				for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
+				for (Object o : world.getEntitiesWithinAABBExcludingEntity(player,
 																		   new AxisAlignedBB(selection.pos1().x,
 																							 selection.pos1().y,
 																							 selection.pos1().z,
@@ -249,18 +245,12 @@ public abstract class MinecraftServerMixin {
 			}
 			
 			editList.set(editList.indexOf(queueInfo),
-						 new QueueInfo(queueInfo.id(),
-									   selections,
-									   edit,
-									   undo,
-									   queueInfo.redoList(),
-									   num,
-									   queueInfo.player()));
+						 new QueueInfo(queueInfo.id(), selections, edit, undo, queueInfo.redoList(), num, player));
 			
 			if (removeList.isEmpty() && isNonBlockEmpty && isBlockEmpty && isAllBlocksEmpty) {
 				if (!isEntitiesEmpty) {
 					for (Selection selection : selections) {
-						for (Object o : world.getEntitiesWithinAABBExcludingEntity(queueInfo.player(),
+						for (Object o : world.getEntitiesWithinAABBExcludingEntity(player,
 																				   new AxisAlignedBB(selection.pos1().x,
 																									 selection.pos1().y,
 																									 selection.pos1().z,
@@ -321,28 +311,28 @@ public abstract class MinecraftServerMixin {
 				}
 				
 				if (num[0] + num[1] + num[2] + num[3] > 0) {
-					if (!queueInfo.id().equals("undo")) {
-						undoList.add(new QueueInfo("undo",
+					if (!queueInfo.id().equals(player.getCommandSenderName() + "|undo")) {
+						undoPlayersMap.get(player)
+								.add(new QueueInfo(player.getCommandSenderName() + "|undo",
 												   selections,
 												   duplicateSavedList(undo),
 												   createEmptySavedList(),
 												   duplicateSavedList(queueInfo.redoList()),
 												   new int[SAVED_NUM],
-												   queueInfo.player()));
+												   player));
 					}
 					
-					sendEditMsg(queueInfo.player(),
-								String.format(StatCollector.translateToLocal("commands.edit"),
-											  num[0] + num[2],
-											  num[1] + num[3],
-											  num[0],
-											  num[2],
-											  num[1],
-											  num[3]));
+					sendEditMsg(player,
+								"commands.edit",
+								num[0] + num[2],
+								num[1] + num[3],
+								num[0],
+								num[2],
+								num[1],
+								num[3]);
 				}
 				else {
-					sendErrorMsg(queueInfo.player(),
-								 String.format(StatCollector.translateToLocal("commands.error.edit")));
+					sendErrorMsg(player, "commands.error.edit");
 				}
 				
 				editList.remove(queueInfo);
