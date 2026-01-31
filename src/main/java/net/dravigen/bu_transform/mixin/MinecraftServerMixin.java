@@ -267,24 +267,60 @@ public abstract class MinecraftServerMixin {
 							num[3]++;
 						}
 					}
-					
-					for (EntityInfo info : entities) {
-						Entity entity = EntityList.createEntityByID(EntityList.getEntityIDFromClass(info.entityClass()),
-																	world);
-						LocAndAngle locAndAngle = info.locAndAngle();
-						entity.readFromNBT(info.nbt());
-						entity.setLocationAndAngles(locAndAngle.x(),
-													locAndAngle.y(),
-													locAndAngle.z(),
-													locAndAngle.yaw(),
-													locAndAngle.pitch());
-						
-						world.spawnEntityInWorld(entity);
-						num[1]++;
-					}
-					
-					entities.clear();
-				}
+
+//					for (EntityInfo info : entities) {
+//						Entity entity = EntityList.createEntityByID(EntityList.getEntityIDFromClass(info.entityClass()),
+//																	world);
+//						LocAndAngle locAndAngle = info.locAndAngle();
+//						entity.readFromNBT(info.nbt());
+//						entity.setLocationAndAngles(locAndAngle.x(),
+//													locAndAngle.y(),
+//													locAndAngle.z(),
+//													locAndAngle.yaw(),
+//													locAndAngle.pitch());
+//
+//						world.spawnEntityInWorld(entity);
+//						num[1]++;
+//					}
+//
+//					entities.clear();
+//				}
+
+                    for (EntityInfo info : entities) {
+                        LocAndAngle loc = info.locAndAngle();
+
+                        NBTTagCompound entityNbt = info.nbt() != null ? (NBTTagCompound) info.nbt().copy() : new NBTTagCompound();
+
+                        NBTTagList posList = new NBTTagList();
+                        posList.appendTag(new NBTTagDouble(Double.toString(loc.x())));
+                        posList.appendTag(new NBTTagDouble(Double.toString(loc.y())));
+                        posList.appendTag(new NBTTagDouble(Double.toString(loc.z())));
+                        entityNbt.setTag("Pos", posList);
+
+                        entityNbt.setDouble("PosX", loc.x());
+                        entityNbt.setDouble("PosY", loc.y());
+                        entityNbt.setDouble("PosZ", loc.z());
+
+                        NBTTagList motionList = new NBTTagList();
+                        motionList.appendTag(new NBTTagDouble(Double.toString(0.0)));
+                        motionList.appendTag(new NBTTagDouble(Double.toString(0.0)));
+                        motionList.appendTag(new NBTTagDouble(Double.toString(0.0)));
+                        entityNbt.setTag("Motion", motionList);
+
+                        Entity entity = EntityList.createEntityByID(EntityList.getEntityIDFromClass(info.entityClass()), world);
+                        if (entity == null) continue;
+
+                        entity.readFromNBT(entityNbt);
+
+                        entity.setLocationAndAngles(loc.x(), loc.y(), loc.z(), loc.yaw(), loc.pitch());
+                        entity.setPosition(loc.x(), loc.y(), loc.z());
+
+                        world.spawnEntityInWorld(entity);
+                        num[1]++;
+                    }
+
+                    entities.clear();
+                }
 				
 				for (Selection selection : selections) {
 					int x1 = selection.pos1().x;
@@ -293,14 +329,14 @@ public abstract class MinecraftServerMixin {
 					int x2 = selection.pos2().x;
 					int y2 = selection.pos2().y;
 					int z2 = selection.pos2().z;
-					
+
 					int minX = Math.min(x1, x2);
 					int minY = Math.min(y1, y2);
 					int minZ = Math.min(z1, z2);
 					int maxX = Math.max(x1, x2);
 					int maxY = Math.max(y1, y2);
 					int maxZ = Math.max(z1, z2);
-					
+
 					for (int y = minY; y <= maxY; y++) {
 						for (int x = minX; x <= maxX; x++) {
 							for (int z = minZ; z <= maxZ; z++) {
